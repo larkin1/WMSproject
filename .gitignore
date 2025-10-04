@@ -1,0 +1,7 @@
+# Unnecesary
+.venv
+*__pycache__
+
+# Temporary
+*.csv
+*.json
