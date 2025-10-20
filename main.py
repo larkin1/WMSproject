@@ -1,6 +1,7 @@
 import csv
 import difflib
 import os
+import sys
 import json
 
 from kivy.app import App
@@ -28,9 +29,15 @@ Config.set('kivy', 'log_level', 'error')
 global api
 global commit_queue
 
+if getattr(sys, 'frozen', False):  # Running as compiled EXE
+    BASE_PATH = os.path.dirname(sys.executable)
+else:  # Running from source
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
 needs_key = False
-if os.path.isfile("settings.json"):
-    with open("settings.json", "r") as f:
+settings_path = os.path.join(BASE_PATH, "settings.json")
+if os.path.isfile(settings_path):
+    with open(settings_path, "r") as f:
         try:
             file = json.load(f)
             SUPABASE_KEY = file["supabase_key"]
@@ -42,12 +49,12 @@ if os.path.isfile("settings.json"):
             f.close()
         except:
             f.close()
-            with open("settings.json", "w") as file:
+            with open(settings_path, "w") as file:
                 base = {"supabase_url": "", "supabase_key": ""}
                 file.close()
                 needs_key = True
 else:
-    with open("settings.json", "w") as file:
+    with open(settings_path, "w") as file:
         base = {"supabase_url": "", "supabase_key": ""}
         file.close()
         needs_key = True
@@ -132,12 +139,13 @@ class CommitUI(BoxLayout):
         if it fails, get the last cached data from the csv.
         """
         items = {}
+        items_csv = os.path.join(BASE_PATH, "items.csv")
         try:
-            api.export_items_to_csv("items.csv")
+            api.export_items_to_csv(items_csv)
         except:
             print("Could not fetch new items data. Using cached data.")
 
-        with open("items.csv", newline='', encoding="utf-8") as f:
+        with open(items_csv, newline='', encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 items[row['name']] = int(row['id'])
@@ -150,12 +158,13 @@ class CommitUI(BoxLayout):
         if it fails, get the last cached data from the csv.
         """
         locations = {}
+        locations_csv = os.path.join(BASE_PATH, "locations.csv")
         try:
-            api.export_location_data_to_csv("locations.csv")
+            api.export_location_data_to_csv(locations_csv)
         except:
             print("Could not fetch new location data. Using cached data.")
 
-        with open("locations.csv", newline='', encoding="utf-8") as f:
+        with open(locations_csv, newline='', encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 locations[row['location']] = row['items']
@@ -391,7 +400,7 @@ class KeyInputUI(BoxLayout):
 
         if valid:
             obj = {"supabase_url": self.url, "supabase_key": self.key}
-            with open("settings.json", "w") as f:
+            with open(settings_path, "w") as f:
                 json.dump(obj, f)
             self.sm.current = 'welcome'
         else:

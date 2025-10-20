@@ -1,13 +1,20 @@
 import json
 import os
+import sys
 import time
 import threading
 import socket
 from src.server import SupabaseAPI
 
+if getattr(sys, 'frozen', False):  # Running as compiled EXE
+    BASE_PATH = os.path.dirname(sys.executable)
+else:  # Running from source
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+commit_file = os.path.join(BASE_PATH, "pending_commits.json")
 
 class JsonCommitQueue:
-    def __init__(self, api: SupabaseAPI, file_path="pending_commits.json", check_interval=5):
+    def __init__(self, api: SupabaseAPI, file_path=commit_file, check_interval=5):
         self.api = api
         self.file_path = file_path
         self.check_interval = check_interval

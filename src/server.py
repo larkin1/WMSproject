@@ -1,5 +1,6 @@
 import os
 import csv
+import sys
 
 from supabase import create_client, Client
 
@@ -10,6 +11,11 @@ Can:
  - look up commits based on ID
  - export compiled commits to a csv (export an overview)
 """
+
+if getattr(sys, 'frozen', False):  # Running as compiled EXE
+    BASE_PATH = os.path.dirname(sys.executable)
+else:  # Running from source
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 class SupabaseAPI:
     def __init__(self, url: str, anon_key: str):
@@ -45,8 +51,8 @@ class SupabaseAPI:
 
         return data.data
 
-
-    def export_overview_to_csv(self, file_path: str = "overview.csv") -> str:
+    path = os.path.join(BASE_PATH, "overview.csv")
+    def export_overview_to_csv(self, file_path: str = path) -> str:
         """
         Exports the live overview (location, item_id, current_qty) into a CSV file.
         Returns the path to the saved file.

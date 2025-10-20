@@ -10,3 +10,6 @@
 build/
 dist/
 main.spec
+main.build/
+main.dist/
+main.bin
