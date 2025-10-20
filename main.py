@@ -1,7 +1,11 @@
 import csv
 import difflib
+import os
+import json
+
 from kivy.app import App
 from kivy.uix.popup import Popup
+from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
@@ -9,15 +13,77 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from kivy.clock import Clock
+from kivy.graphics import Color, Rectangle
+from kivy.animation import Animation
 
-from src.queue import JsonCommitQueue
+from src.commitmgr import JsonCommitQueue
 from src.server import SupabaseAPI
 
-SUPABASE_URL = "https://NOTHING_TO_SEE_HERE.supabase.co"
-SUPABASE_KEY = "NOTHING_TO_SEE_HERE"
+os.environ["KIVY_NO_CONSOLELOG"] = "1"
+os.environ["KIVY_LOG_MODE"] = "error"
 
-api = SupabaseAPI(SUPABASE_URL, SUPABASE_KEY)
-commit_queue = JsonCommitQueue(api)
+from kivy.config import Config
+Config.set('kivy', 'log_level', 'error')
+
+global api
+global commit_queue
+
+needs_key = False
+if os.path.isfile("settings.json"):
+    with open("settings.json", "r") as f:
+        try:
+            file = json.load(f)
+            SUPABASE_KEY = file["supabase_key"]
+            SUPABASE_URL = file["supabase_url"]
+            api = SupabaseAPI(SUPABASE_URL, SUPABASE_KEY)
+            commit_queue = JsonCommitQueue(api)
+
+            print(api.check())
+            f.close()
+        except:
+            f.close()
+            with open("settings.json", "w") as file:
+                base = {"supabase_url": "", "supabase_key": ""}
+                file.close()
+                needs_key = True
+else:
+    with open("settings.json", "w") as file:
+        base = {"supabase_url": "", "supabase_key": ""}
+        file.close()
+        needs_key = True
+
+# api = SupabaseAPI(SUPABASE_URL, SUPABASE_KEY)
+# commit_queue = JsonCommitQueue(api)
+
+
+class ErrorBar(BoxLayout):
+    def __init__(self, message, **kwargs):
+        super().__init__(orientation='vertical', size_hint_y=None, height=40, **kwargs)
+
+        self.label = Label(text=message, color=(1, 1, 1, 1))
+        self.add_widget(self.label)
+
+        # Draw background
+        with self.canvas.before:
+            Color(1, 0, 0, 1)  # Red background
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+
+        # Update bg size on resize
+        self.bind(size=self._update_rect, pos=self._update_rect)
+
+        # Auto fade-out
+        Clock.schedule_once(self.fade_and_remove, 3)
+
+    def _update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
+
+    def fade_and_remove(self, *args):
+        anim = Animation(opacity=0, duration=0.5)
+        anim.bind(on_complete=lambda *x: self.parent.remove_widget(self) if self.parent else None)
+        anim.start(self)
+
+
 
 class CommitUI(BoxLayout):
     """
@@ -28,6 +94,7 @@ class CommitUI(BoxLayout):
         Initialise the app.
         """
         super().__init__(orientation='vertical', **kwargs)
+
         self.scanner_input = TextInput(hint_text="Scan location code...", multiline=False, size_hint_y=None, height=50)
         self.scanner_input.bind(on_text_validate=self.on_scanned)
         self.add_widget(self.scanner_input)
@@ -58,7 +125,6 @@ class CommitUI(BoxLayout):
         self.locations = self.load_locations()
         self.items = self.load_items()
         self.scanner_input.focus = True
-
 
     def load_items(self):
         """
@@ -236,9 +302,123 @@ class CommitUI(BoxLayout):
         self.__init__()
 
 
+class WelcomeScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        def onrelease(state):
+            def _switch(instance):
+                self.manager.current = state
+            return _switch
+
+        layout = BoxLayout(orientation='vertical', spacing=20, padding=50)
+        layout.add_widget(Button(text="Add/Remove Stock", on_release=onrelease('commit')))
+        # layout.add_widget(Button(text="Stock Take", on_release=onrelease('stock')))
+        layout.add_widget(Button(text="Exit", on_release=lambda x: App.get_running_app().stop()))
+        self.add_widget(layout)
+
+
+class Settings():
+    pass
+
+
+class CommitScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical')
+
+        back_btn = Button(text="Back to Main Menu", size_hint_y=None, height=60)
+        back_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'welcome'))
+        layout.add_widget(back_btn)
+
+        self.add_widget(layout)
+
+        layout.add_widget(CommitUI())
+
+
+class KeyInputUI(BoxLayout):
+    def __init__(self, sm, **kwargs):
+        super().__init__(orientation='vertical', **kwargs)
+
+        self.sm = sm
+
+        # layout = BoxLayout( spacing=20, padding=50)
+        self.url_input = TextInput(hint_text="Input API URL", multiline=False, size_hint_y=None, height=50)
+        self.url_input.bind(on_text_validate=self.on_input_url)
+        self.add_widget(self.url_input)
+
+        self.key_input = TextInput(hint_text="Input API Key", multiline=False, size_hint_y=None, height=50)
+        self.key_input.bind(on_text_validate=self.on_input_key)
+        self.add_widget(self.key_input)
+
+        self.submit_button = Button(text = "Submit")
+        self.submit_button.bind(on_release=self.submit)
+        self.add_widget(self.submit_button)
+
+    def on_input_url(self, instance):
+        self.key_input.focus = True
+
+    def on_input_key(self, instance):
+        self.submit(self)
+
+    def show_error(self, message):
+        # Remove existing error bars
+        for child in list(self.children):
+            if isinstance(child, ErrorBar):
+                self.remove_widget(child)
+
+        # Add new one at top
+        self.add_widget(ErrorBar(message), index=0)
+
+    def submit(self, instance):
+        self.url = self.url_input.text.strip()
+        self.key = self.key_input.text.strip()
+
+        print("Connecting to SupaBase...")
+        print(f"key: {self.key}")
+        print(f"url: {self.url}")
+
+        global api
+        global commit_queue
+
+        if not self.url.startswith("http"):
+            self.url = f"https://{self.url}.supabase.co"
+
+        api = SupabaseAPI(self.url, self.key)
+        commit_queue = JsonCommitQueue(api)
+
+        valid = api.check()
+
+        if valid:
+            obj = {"supabase_url": self.url, "supabase_key": self.key}
+            with open("settings.json", "w") as f:
+                json.dump(obj, f)
+            self.sm.current = 'welcome'
+        else:
+            self.show_error("Invalid credentials or cannot connect.")
+            return
+
+
+class KeyInputScreen(Screen):
+    def __init__(self, sm, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical')
+        self.add_widget(layout)
+        layout.add_widget(KeyInputUI(sm=sm))
+
+
+
 class CommitApp(App):
     def build(self):
-        return CommitUI()
+        sm = ScreenManager()
+        sm.add_widget(WelcomeScreen(name='welcome'))
+        sm.add_widget(CommitScreen(name='commit'))
+        sm.add_widget(KeyInputScreen(sm, name='keyin'))
+        # Add more screens as needed:
+        # sm.add_widget(OtherScreen(name='other'))
+
+        sm.current = 'keyin' if needs_key else 'welcome'
+        return sm
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ Can:
 
 class SupabaseAPI:
     def __init__(self, url: str, anon_key: str):
-        self.supabase: Client = create_client(url, anon_key)
+        self.supabase: Client = create_client(url, anon_key,)
 
     def send_commit(self, device_id: str, location: str, delta: int, item_id: int):
         payload = {
@@ -98,6 +98,17 @@ class SupabaseAPI:
 
         return os.path.abspath(file_path)
 
+    def check(self) -> bool:
+        """
+        Check if Supabase connection is valid by running a lightweight query.
+        """
+        try:
+            res = self.supabase.from_("items").select("id").limit(1).execute()
+            # If it returns data or even an empty list, the connection is valid
+            return res.data is not None
+        except Exception:
+            return False
+
 
 
 if __name__ == "__main__":
@@ -106,20 +117,22 @@ if __name__ == "__main__":
 
     api = SupabaseAPI(SUPABASE_URL, SUPABASE_KEY)
 
-    resp = api.send_commit(
-        device_id="test",
-        location="test",
-        delta=10,
-        item_id=1233
-    )
-    print(resp)
-    commitID = resp["commit_id"]
+    print(api.check())
 
-    out = api.fetch_commit(commitID)
-    print(out)
+    # resp = api.send_commit(
+    #     device_id="test",
+    #     location="test",
+    #     delta=10,
+    #     item_id=1233
+    # )
+    # print(resp)
+    # commitID = resp["commit_id"]
 
-    try:
-        csv_path = api.export_overview_to_csv("overview.csv")
-        print(f"CSV exported to: {csv_path}")
-    except Exception as e:
-        print(f"Export failed: {e}")
+    # out = api.fetch_commit(commitID)
+    # print(out)
+
+    # try:
+    #     csv_path = api.export_overview_to_csv("overview.csv")
+    #     print(f"CSV exported to: {csv_path}")
+    # except Exception as e:
+    #     print(f"Export failed: {e}")
