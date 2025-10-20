@@ -5,3 +5,8 @@
 # Temporary
 *.csv
 *.json
+
+# Packaging
+build/
+dist/
+main.spec
