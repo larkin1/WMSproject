@@ -13,9 +13,9 @@ import (
 )
 
 type Client struct {
-	BaseURL string
-	APIKey  string
-	Client  *http.Client
+	BaseURL  string
+	APIKey   string
+	Client   *http.Client
 	BasePath string
 }
 
@@ -32,8 +32,8 @@ type Item struct {
 }
 
 type Location struct {
-	Location string `json:"location"`
-	Items    string `json:"items"`
+	LocationName string `json:"location"`
+	Items        []int  `json:"items"`
 }
 
 func NewClient(baseURL, apiKey, basePath string) *Client {
@@ -166,7 +166,8 @@ func (c *Client) ExportLocationsToCSV(filePath string) error {
 	writer.Write([]string{"location", "items"})
 
 	for _, loc := range locations {
-		writer.Write([]string{loc.Location, loc.Items})
+		itemsStr := fmt.Sprintf("%v", loc.Items)
+		writer.Write([]string{loc.LocationName, itemsStr})
 	}
 
 	writer.Flush()
