@@ -52,19 +52,23 @@ func NewCommitUI(apiClient *api.Client, commitQueue *queue.Queue, basePath strin
 		locations: make(map[string][]int),
 	}
 
-	c.loadItems()
-	c.loadLocations()
-
 	return c
 }
 
 func (c *CommitUI) loadItems() {
+	// Clear old data
+	c.items = make(map[string]int)
+	c.items_r = make(map[int]string)
+
 	itemsCSV := filepath.Join(c.basePath, "items.csv")
 
-	// Try to fetch fresh data
-	c.api.ExportItemsToCSV(itemsCSV)
+	// Always try to fetch fresh data from API
+	err := c.api.ExportItemsToCSV(itemsCSV)
+	if err != nil {
+		// API call failed, try to use cached CSV
+	}
 
-	// Load from CSV
+	// Load from CSV (either fresh or cached)
 	file, err := os.Open(itemsCSV)
 	if err != nil {
 		return
@@ -82,10 +86,15 @@ func (c *CommitUI) loadItems() {
 			continue // skip header
 		}
 		if len(record) >= 2 {
-			id, _ := strconv.Atoi(record[0])
-			name := record[1]
-			c.items[name] = id
-			c.items_r[id] = name
+			id, err := strconv.Atoi(strings.TrimSpace(record[0]))
+			if err != nil {
+				continue
+			}
+			name := strings.TrimSpace(record[1])
+			if name != "" {
+				c.items[name] = id
+				c.items_r[id] = name
+			}
 		}
 	}
 }
@@ -120,9 +129,10 @@ func (c *CommitUI) onScanned(text string) {
 			c.itemID = itemIDs[0]
 		}
 	} else {
-		// Location doesn't exist - show search for new location
-		c.setError(fmt.Sprintf("Location '%s' not found. Use Change Item to select an item for new location.", c.location))
+		// Location doesn't exist - automatically show item picker
+		c.setError(fmt.Sprintf("New location '%s' - select an item below:", c.location))
 		c.itemID = 0
+		c.showItemSearch()
 		return
 	}
 
@@ -174,7 +184,7 @@ func (c *CommitUI) setError(msg string) {
 	if msg == "" {
 		c.error.ParseMarkdown("")
 	} else {
-		c.error.ParseMarkdown("**Error:** " + msg)
+		c.error.ParseMarkdown("**Status:** " + msg)
 	}
 }
 
@@ -215,12 +225,20 @@ func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
 }
 
 func (c *CommitUI) showItemSearch() {
+	// Ensure items are loaded
+	c.loadItems()
+
 	// Build sorted list of item names
 	var itemNames []string
 	for name := range c.items {
 		itemNames = append(itemNames, name)
 	}
 	sort.Strings(itemNames)
+
+	if len(itemNames) == 0 {
+		c.setError("No items loaded from database")
+		return
+	}
 
 	// Create the select widget
 	selectWidget := widget.NewSelect(itemNames, func(value string) {
@@ -242,6 +260,10 @@ func (c *CommitUI) showItemSearch() {
 }
 
 func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
+	// Load data when renderer is created
+	c.loadItems()
+	c.loadLocations()
+
 	c.scannerInput = widget.NewEntry()
 	c.scannerInput.SetPlaceHolder("Scan location code...")
 	c.scannerInput.OnSubmitted = func(s string) {
