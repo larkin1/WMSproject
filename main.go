@@ -67,7 +67,9 @@ func loadSettings() (bool, error) {
 func switchScreen(screenName string) {
 	switch screenName {
 	case "commit":
-		mainWindow.SetContent(ui.NewCommitUI(appAPI, commitQueue, basePath))
+		commitUI := ui.NewCommitUI(appAPI, commitQueue, basePath)
+		commitUI.SetWindow(mainWindow)
+		mainWindow.SetContent(commitUI)
 	case "welcome":
 		mainWindow.SetContent(makeApp())
 	default:
