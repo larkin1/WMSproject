@@ -214,6 +214,30 @@ func (c *CommitUI) setError(msg string) {
 	}
 }
 
+// fuzzyMatch checks if query matches name with fuzzy matching
+func (c *CommitUI) fuzzyMatch(query, name string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	name = strings.ToLower(name)
+
+	if query == "" {
+		return true // empty query matches everything
+	}
+
+	// Exact match
+	if strings.Contains(name, query) {
+		return true
+	}
+
+	// Fuzzy: check if all query chars appear in name in order
+	queryIdx := 0
+	for _, char := range name {
+		if queryIdx < len(query) && char == rune(query[queryIdx]) {
+			queryIdx++
+		}
+	}
+	return queryIdx == len(query)
+}
+
 func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
 	log.Printf("[CommitUI] showItemSelectDialog called with %d items\n", len(itemIDs))
 	// Create options for the select widget
@@ -235,6 +259,7 @@ func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
 		log.Printf("[CommitUI] Item selected from dialog: %s\n", value)
 		if id, ok := itemMap[value]; ok {
 			c.itemID = id
+			c.updateLocationLabel() // Update label after selection
 		}
 	})
 	selectWidget.PlaceHolder = "Select item..."
@@ -251,6 +276,10 @@ func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
 
 	log.Printf("[CommitUI] Creating dialog, window is nil: %v\n", c.window == nil)
 	dlg := dialog.NewCustom("Select Item", "OK", form, c.window)
+	dlg.SetOnClosed(func() {
+		log.Println("[CommitUI] Item select dialog closed")
+		c.updateLocationLabel() // Update label when dialog closes
+	})
 	dlg.Show()
 	log.Println("[CommitUI] Dialog shown")
 }
@@ -275,31 +304,51 @@ func (c *CommitUI) showItemSearch() {
 		return
 	}
 
-	for i, name := range itemNames {
-		log.Printf("[CommitUI] Item %d: %s\n", i, name)
-	}
+	// Create search entry
+	searchEntry := widget.NewEntry()
+	searchEntry.SetPlaceHolder("Type to search...")
 
-	// Create the select widget
+	// Create select widget (will be filtered)
 	selectWidget := widget.NewSelect(itemNames, func(value string) {
-		log.Printf("[CommitUI] Item selected from change: %s\n", value)
+		log.Printf("[CommitUI] Item selected from search: %s\n", value)
 		if id, ok := c.items[value]; ok {
 			c.itemID = id
 			log.Printf("[CommitUI] Item ID set to: %d\n", c.itemID)
 			c.updateLocationLabel()
 		}
 	})
-	selectWidget.PlaceHolder = "Search or select item..."
+	selectWidget.PlaceHolder = "Search results..."
+
+	// Update select options when search changes
+	searchEntry.OnChanged = func(s string) {
+		var filtered []string
+		for _, name := range itemNames {
+			if c.fuzzyMatch(s, name) {
+				filtered = append(filtered, name)
+			}
+		}
+		log.Printf("[CommitUI] Search '%s' filtered to %d items\n", s, len(filtered))
+		selectWidget.Options = filtered
+		if len(filtered) > 0 {
+			selectWidget.SetSelected(filtered[0])
+		}
+	}
 
 	// Create form
 	form := container.NewVBox(
-		widget.NewLabel("Select an item:"),
+		widget.NewLabel("Search and select an item:"),
+		searchEntry,
 		selectWidget,
 	)
 
-	log.Printf("[CommitUI] Creating change item dialog, window is nil: %v\n", c.window == nil)
-	dlg := dialog.NewCustom("Change Item", "OK", form, c.window)
+	log.Printf("[CommitUI] Creating item search dialog, window is nil: %v\n", c.window == nil)
+	dlg := dialog.NewCustom("Select Item", "OK", form, c.window)
+	dlg.SetOnClosed(func() {
+		log.Println("[CommitUI] Item search dialog closed")
+		c.updateLocationLabel() // Update label when dialog closes
+	})
 	dlg.Show()
-	log.Println("[CommitUI] Change item dialog shown")
+	log.Println("[CommitUI] Item search dialog shown")
 }
 
 func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
