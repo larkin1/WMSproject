@@ -3,7 +3,6 @@ package ui
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -28,9 +27,12 @@ func (w *WelcomeScreen) CreateRenderer() fyne.WidgetRenderer {
 		fyne.CurrentApp().Quit()
 	})
 
+	title := widget.NewLabel("Warehouse Management System")
+	subtitle := widget.NewLabel("")
+
 	vbox := container.NewVBox(
-		widget.NewLabelWithAlignment("Warehouse Management System", fyne.TextAlignCenter),
-		widget.NewLabelWithAlignment("", fyne.TextAlignCenter),
+		container.NewCenter(title),
+		container.NewCenter(subtitle),
 		addBtn,
 		exitBtn,
 	)
