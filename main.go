@@ -2,15 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"github.com/larkin1/wmsproject/internal/api"
-	"github.com/larkin1/wmsproject/internal/config"
 	"github.com/larkin1/wmsproject/internal/queue"
 	"github.com/larkin1/wmsproject/internal/ui"
 )
@@ -69,7 +66,7 @@ func main() {
 	a := app.New()
 	w := a.NewWindow()
 	w.SetTitle("WMS - Warehouse Management System")
-	w.Resize(fyne.NewSize(600, 800))
+	w.Resize(a.NewSize(600, 800))
 
 	hasSettings, _ := loadSettings()
 
@@ -104,8 +101,8 @@ func main() {
 	}
 }
 
-func makeApp() *container.AppContainer {
-	return container.NewAppContainer(
+func makeApp() *container.Container {
+	return container.NewVBox(
 		ui.NewWelcomeScreen(func(screen string) {
 			// Handle screen switching
 		}),
