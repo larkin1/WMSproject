@@ -49,7 +49,7 @@ func NewClient(baseURL, apiKey, basePath string) *Client {
 }
 
 func (c *Client) Check() bool {
-	req, err := http.NewRequest("GET", c.BaseURL+"/rest/v1/items?limit=1", nil)
+	req, err := http.NewRequest("GET", c.BaseURL+"/rest/v1/items?select=*&limit=1", nil)
 	if err != nil {
 		return false
 	}
@@ -76,6 +76,7 @@ func (c *Client) SendCommit(deviceID, location string, delta, itemID int) (map[s
 	req, _ := http.NewRequest("POST", c.BaseURL+"/rest/v1/commits", bytes.NewBuffer(data))
 	c.setAuthHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=representation")
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -96,10 +97,11 @@ func (c *Client) SendCommit(deviceID, location string, delta, itemID int) (map[s
 
 func (c *Client) FetchItems() ([]Item, error) {
 	log.Println("[API] FetchItems() called")
-	req, _ := http.NewRequest("GET", c.BaseURL+"/rest/v1/items", nil)
+	// Add select=* to explicitly request all columns
+	req, _ := http.NewRequest("GET", c.BaseURL+"/rest/v1/items?select=*", nil)
 	c.setAuthHeaders(req)
 
-	log.Printf("[API] Making request to: %s\n", c.BaseURL+"/rest/v1/items")
+	log.Printf("[API] Making request to: %s\n", c.BaseURL+"/rest/v1/items?select=*")
 	resp, err := c.Client.Do(req)
 	if err != nil {
 		log.Printf("[API] Request error: %v\n", err)
@@ -128,7 +130,7 @@ func (c *Client) FetchItems() ([]Item, error) {
 }
 
 func (c *Client) FetchLocations() ([]Location, error) {
-	req, _ := http.NewRequest("GET", c.BaseURL+"/rest/v1/locations", nil)
+	req, _ := http.NewRequest("GET", c.BaseURL+"/rest/v1/locations?select=*", nil)
 	c.setAuthHeaders(req)
 
 	resp, err := c.Client.Do(req)
