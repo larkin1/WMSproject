@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -37,7 +38,7 @@ type CommitUI struct {
 	api       *api.Client
 	queue     *queue.Queue
 	basePath  string
-	canvasObj fyne.CanvasObject // Store the canvas to show dialogs
+	window    fyne.Window // Store the window for dialogs
 }
 
 func NewCommitUI(apiClient *api.Client, commitQueue *queue.Queue, basePath string) *CommitUI {
@@ -178,75 +179,66 @@ func (c *CommitUI) setError(msg string) {
 }
 
 func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
-	// Create a dialog to select from multiple items at this location
-	items := make([]string, len(itemIDs))
-	itemMap := make(map[string]int) // map from display name to ID
+	// Create options for the select widget
+	options := make([]string, len(itemIDs))
+	itemMap := make(map[string]int)
 
 	for i, id := range itemIDs {
 		name := c.items_r[id]
 		if name == "" {
 			name = fmt.Sprintf("ID: %d", id)
 		}
-		items[i] = name
+		options[i] = name
 		itemMap[name] = id
 	}
 
-	select := widget.NewSelect(items, func(value string) {
+	// Create the select widget
+	selectWidget := widget.NewSelect(options, func(value string) {
 		if id, ok := itemMap[value]; ok {
 			c.itemID = id
-			c.updateLocationLabel()
 		}
 	})
-	select.PlaceHolder = "Select item..."
-	if len(items) > 0 {
-		select.SetSelected(items[0])
-		c.itemID = itemMap[items[0]]
+	selectWidget.PlaceHolder = "Select item..."
+	if len(options) > 0 {
+		selectWidget.SetSelected(options[0])
+		c.itemID = itemMap[options[0]]
 	}
 
-	d := dialog.NewForm(
-		[]*widget.FormItem{
-			widget.NewFormItem("Items at this location", select),
-		},
-		"Select",
-		"Cancel",
-		func(ok bool) {
-			if ok {
-				c.updateLocationLabel()
-			}
-		},
-		c.canvasObj.(fyne.Window),
+	// Create form
+	form := container.NewVBox(
+		widget.NewLabel("Multiple items found at this location. Select one:"),
+		selectWidget,
 	)
-	d.Show()
+
+	dlg := dialog.NewCustom("Select Item", "OK", form, c.window)
+	dlg.Show()
 }
 
 func (c *CommitUI) showItemSearch() {
-	// Create a search/select dialog for items
+	// Build sorted list of item names
 	var itemNames []string
 	for name := range c.items {
 		itemNames = append(itemNames, name)
 	}
+	sort.Strings(itemNames)
 
-	select := widget.NewSelect(itemNames, func(value string) {
+	// Create the select widget
+	selectWidget := widget.NewSelect(itemNames, func(value string) {
 		if id, ok := c.items[value]; ok {
 			c.itemID = id
+			c.updateLocationLabel()
 		}
 	})
-	select.PlaceHolder = "Search or select item..."
+	selectWidget.PlaceHolder = "Search or select item..."
 
-	d := dialog.NewForm(
-		[]*widget.FormItem{
-			widget.NewFormItem("Item", select),
-		},
-		"Select",
-		"Cancel",
-		func(ok bool) {
-			if ok && select.Selected != "" {
-				c.updateLocationLabel()
-			}
-		},
-		c.canvasObj.(fyne.Window),
+	// Create form
+	form := container.NewVBox(
+		widget.NewLabel("Select an item:"),
+		selectWidget,
 	)
-	d.Show()
+
+	dlg := dialog.NewCustom("Change Item", "OK", form, c.window)
+	dlg.Show()
 }
 
 func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
@@ -290,8 +282,10 @@ func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
 		c.error,
 	)
 
-	// Store the canvas for dialog rendering
-	c.canvasObj = vbox
-
 	return widget.NewSimpleRenderer(vbox)
+}
+
+// SetWindow allows main to pass the window reference
+func (c *CommitUI) SetWindow(w fyne.Window) {
+	c.window = w
 }
