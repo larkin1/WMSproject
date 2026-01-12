@@ -18,6 +18,7 @@ var (
 	settingsPath string
 	appAPI       *api.Client
 	commitQueue  *queue.Queue
+	mainWindow   fyne.Window
 )
 
 func init() {
@@ -63,10 +64,22 @@ func loadSettings() (bool, error) {
 	return true, nil
 }
 
+func switchScreen(screenName string) {
+	switch screenName {
+	case "commit":
+		mainWindow.SetContent(ui.NewCommitUI(appAPI, commitQueue, basePath))
+	case "welcome":
+		mainWindow.SetContent(makeApp())
+	default:
+		mainWindow.SetContent(makeApp())
+	}
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("WMS - Warehouse Management System")
 	w.Resize(fyne.NewSize(600, 800))
+	mainWindow = w
 
 	hasSettings, _ := loadSettings()
 
@@ -103,8 +116,6 @@ func main() {
 
 func makeApp() fyne.CanvasObject {
 	return container.NewVBox(
-		ui.NewWelcomeScreen(func(screen string) {
-			// Handle screen switching
-		}),
+		ui.NewWelcomeScreen(switchScreen),
 	)
 }
