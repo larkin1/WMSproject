@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"github.com/larkin1/wmsproject/internal/api"
@@ -66,7 +67,7 @@ func main() {
 	a := app.New()
 	w := a.NewWindow()
 	w.SetTitle("WMS - Warehouse Management System")
-	w.Resize(a.NewSize(600, 800))
+	w.Resize(fyne.NewSize(600, 800))
 
 	hasSettings, _ := loadSettings()
 
