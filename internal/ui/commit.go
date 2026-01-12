@@ -183,7 +183,7 @@ func (c *CommitUI) commit() {
 	c.queue.SubmitCommit("TOUGHPAD01", c.location, qty, c.itemID)
 	c.deltaInput.SetText("")
 	c.setError("")
-	c.scannerInput.Focus()
+	// Focus removed - Fyne v2 doesn't support Entry.Focus()
 }
 
 func (c *CommitUI) setError(msg string) {
