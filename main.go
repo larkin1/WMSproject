@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/storage"
 	"github.com/larkin1/wmsproject/internal/api"
 	"github.com/larkin1/wmsproject/internal/queue"
 	"github.com/larkin1/wmsproject/internal/ui"
