@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -94,18 +95,34 @@ func (c *Client) SendCommit(deviceID, location string, delta, itemID int) (map[s
 }
 
 func (c *Client) FetchItems() ([]Item, error) {
+	log.Println("[API] FetchItems() called")
 	req, _ := http.NewRequest("GET", c.BaseURL+"/rest/v1/items", nil)
 	c.setAuthHeaders(req)
 
+	log.Printf("[API] Making request to: %s\n", c.BaseURL+"/rest/v1/items")
 	resp, err := c.Client.Do(req)
 	if err != nil {
+		log.Printf("[API] Request error: %v\n", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	log.Printf("[API] Response status: %d\n", resp.StatusCode)
+
 	body, _ := io.ReadAll(resp.Body)
+	log.Printf("[API] Response body: %s\n", string(body))
+
 	var items []Item
-	json.Unmarshal(body, &items)
+	err = json.Unmarshal(body, &items)
+	if err != nil {
+		log.Printf("[API] JSON unmarshal error: %v\n", err)
+		return nil, err
+	}
+
+	log.Printf("[API] Parsed %d items\n", len(items))
+	for i, item := range items {
+		log.Printf("[API] Item %d: ID=%d, Name=%s\n", i, item.ID, item.Name)
+	}
 
 	return items, nil
 }
@@ -128,10 +145,14 @@ func (c *Client) FetchLocations() ([]Location, error) {
 }
 
 func (c *Client) ExportItemsToCSV(filePath string) error {
+	log.Println("[API] ExportItemsToCSV() called")
 	items, err := c.FetchItems()
 	if err != nil {
+		log.Printf("[API] FetchItems error: %v\n", err)
 		return err
 	}
+
+	log.Printf("[API] Exporting %d items to CSV\n", len(items))
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -147,6 +168,7 @@ func (c *Client) ExportItemsToCSV(filePath string) error {
 	}
 
 	writer.Flush()
+	log.Printf("[API] CSV export complete: %s\n", filePath)
 	return nil
 }
 
