@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/larkin1/wmsproject/internal/api"
 	"github.com/larkin1/wmsproject/internal/queue"
@@ -33,9 +34,10 @@ type CommitUI struct {
 	items     map[string]int
 	items_r   map[int]string
 
-	api      *api.Client
-	queue    *queue.Queue
-	basePath string
+	api       *api.Client
+	queue     *queue.Queue
+	basePath  string
+	canvasObj fyne.CanvasObject // Store the canvas to show dialogs
 }
 
 func NewCommitUI(apiClient *api.Client, commitQueue *queue.Queue, basePath string) *CommitUI {
@@ -165,7 +167,6 @@ func (c *CommitUI) commit() {
 	c.queue.SubmitCommit("TOUGHPAD01", c.location, qty, c.itemID)
 	c.deltaInput.SetText("")
 	c.setError("")
-	// Focus removed - Fyne v2 doesn't support Entry.Focus()
 }
 
 func (c *CommitUI) setError(msg string) {
@@ -177,36 +178,45 @@ func (c *CommitUI) setError(msg string) {
 }
 
 func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
-	// Create a dialog to select from multiple items
+	// Create a dialog to select from multiple items at this location
 	items := make([]string, len(itemIDs))
+	itemMap := make(map[string]int) // map from display name to ID
+
 	for i, id := range itemIDs {
 		name := c.items_r[id]
 		if name == "" {
 			name = fmt.Sprintf("ID: %d", id)
 		}
 		items[i] = name
+		itemMap[name] = id
 	}
 
 	select := widget.NewSelect(items, func(value string) {
-		// Find the ID for the selected item
-		for _, id := range itemIDs {
-			if c.items_r[id] == value {
-				c.itemID = id
-				break
-			}
+		if id, ok := itemMap[value]; ok {
+			c.itemID = id
+			c.updateLocationLabel()
 		}
-		c.updateLocationLabel()
 	})
 	select.PlaceHolder = "Select item..."
-
-	dialog := widget.NewForm(
-		widget.NewFormItem("Item", select),
-	)
-
-	dialog.SubmitText = "OK"
-	dialog.OnSubmit = func() {
-		c.updateLocationLabel()
+	if len(items) > 0 {
+		select.SetSelected(items[0])
+		c.itemID = itemMap[items[0]]
 	}
+
+	d := dialog.NewForm(
+		[]*widget.FormItem{
+			widget.NewFormItem("Items at this location", select),
+		},
+		"Select",
+		"Cancel",
+		func(ok bool) {
+			if ok {
+				c.updateLocationLabel()
+			}
+		},
+		c.canvasObj.(fyne.Window),
+	)
+	d.Show()
 }
 
 func (c *CommitUI) showItemSearch() {
@@ -219,19 +229,24 @@ func (c *CommitUI) showItemSearch() {
 	select := widget.NewSelect(itemNames, func(value string) {
 		if id, ok := c.items[value]; ok {
 			c.itemID = id
-			c.updateLocationLabel()
 		}
 	})
 	select.PlaceHolder = "Search or select item..."
 
-	dialog := widget.NewForm(
-		widget.NewFormItem("Item", select),
+	d := dialog.NewForm(
+		[]*widget.FormItem{
+			widget.NewFormItem("Item", select),
+		},
+		"Select",
+		"Cancel",
+		func(ok bool) {
+			if ok && select.Selected != "" {
+				c.updateLocationLabel()
+			}
+		},
+		c.canvasObj.(fyne.Window),
 	)
-
-	dialog.SubmitText = "OK"
-	dialog.OnSubmit = func() {
-		c.updateLocationLabel()
-	}
+	d.Show()
 }
 
 func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
@@ -274,6 +289,9 @@ func (c *CommitUI) CreateRenderer() fyne.WidgetRenderer {
 		buttons,
 		c.error,
 	)
+
+	// Store the canvas for dialog rendering
+	c.canvasObj = vbox
 
 	return widget.NewSimpleRenderer(vbox)
 }
