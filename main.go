@@ -65,8 +65,7 @@ func loadSettings() (bool, error) {
 
 func main() {
 	a := app.New()
-	w := a.NewWindow()
-	w.SetTitle("WMS - Warehouse Management System")
+	w := a.NewWindow("WMS - Warehouse Management System")
 	w.Resize(fyne.NewSize(600, 800))
 
 	hasSettings, _ := loadSettings()
