@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -43,7 +44,7 @@ func (s *SettingsUI) submit() {
 	}
 
 	// Auto-prefix https if needed
-	if !string([]rune(url)[0:4]) == "http" {
+	if !strings.HasPrefix(url, "http") {
 		url = "https://" + url
 	}
 
@@ -70,7 +71,7 @@ func (s *SettingsUI) CreateRenderer() fyne.WidgetRenderer {
 	s.urlInput = widget.NewEntry()
 	s.urlInput.SetPlaceHolder("API Base URL (e.g., https://your-api.example.com)")
 	s.urlInput.OnSubmitted = func(text string) {
-		s.keyInput.Focus()
+		// Focus removed - Fyne v2 doesn't support Entry.Focus()
 	}
 
 	s.keyInput = widget.NewEntry()
@@ -87,9 +88,13 @@ func (s *SettingsUI) CreateRenderer() fyne.WidgetRenderer {
 
 	s.errLabel = widget.NewRichTextFromMarkdown("")
 
+	// Use container.NewCenter for centered labels instead of NewLabelWithAlignment
+	title := widget.NewLabel("Warehouse Management System")
+	subtitle := widget.NewLabel("Initial Configuration")
+
 	vbox := container.NewVBox(
-		widget.NewLabelWithAlignment("Warehouse Management System", fyne.TextAlignCenter),
-		widget.NewLabelWithAlignment("Initial Configuration", fyne.TextAlignCenter),
+		container.NewCenter(title),
+		container.NewCenter(subtitle),
 		widget.NewLabel(""),
 		widget.NewLabel("API Configuration:"),
 		s.urlInput,
