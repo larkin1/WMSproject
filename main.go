@@ -102,7 +102,7 @@ func main() {
 	}
 }
 
-func makeApp() *container.Container {
+func makeApp() fyne.CanvasObject {
 	return container.NewVBox(
 		ui.NewWelcomeScreen(func(screen string) {
 			// Handle screen switching
