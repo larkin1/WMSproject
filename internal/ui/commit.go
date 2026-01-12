@@ -18,35 +18,35 @@ import (
 type CommitUI struct {
 	widget.BaseWidget
 
-	scannerInput    *widget.Entry
-	locationLabel   *widget.Label
-	deltaInput      *widget.Entry
-	toggleBtn       *widget.Button
-	commitBtn       *widget.Button
-	changeItemBtn   *widget.Button
-	error           *widget.RichText
+	scannerInput  *widget.Entry
+	locationLabel *widget.Label
+	deltaInput    *widget.Entry
+	toggleBtn     *widget.Button
+	commitBtn     *widget.Button
+	changeItemBtn *widget.Button
+	error         *widget.RichText
 
-	mode        string
-	location    string
-	itemID      int
-	locations   map[string]string
-	items       map[string]int
-	items_r     map[int]string
+	mode      string
+	location  string
+	itemID    int
+	locations map[string][]int
+	items     map[string]int
+	items_r   map[int]string
 
-	api     *api.Client
-	queue   *queue.Queue
+	api      *api.Client
+	queue    *queue.Queue
 	basePath string
 }
 
 func NewCommitUI(apiClient *api.Client, commitQueue *queue.Queue, basePath string) *CommitUI {
 	c := &CommitUI{
-		api:      apiClient,
-		queue:    commitQueue,
-		basePath: basePath,
-		mode:     "ADD",
-		items:    make(map[string]int),
-		items_r:  make(map[int]string),
-		locations: make(map[string]string),
+		api:       apiClient,
+		queue:     commitQueue,
+		basePath:  basePath,
+		mode:      "ADD",
+		items:     make(map[string]int),
+		items_r:   make(map[int]string),
+		locations: make(map[string][]int),
 	}
 
 	c.loadItems()
@@ -88,31 +88,14 @@ func (c *CommitUI) loadItems() {
 }
 
 func (c *CommitUI) loadLocations() {
-	locationsCSV := filepath.Join(c.basePath, "locations.csv")
-
-	// Try to fetch fresh data
-	c.api.ExportLocationsToCSV(locationsCSV)
-
-	// Load from CSV
-	file, err := os.Open(locationsCSV)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
+	locationsData, err := c.api.FetchLocations()
 	if err != nil {
 		return
 	}
 
-	for i, record := range records {
-		if i == 0 {
-			continue // skip header
-		}
-		if len(record) >= 2 {
-			c.locations[record[0]] = record[1]
-		}
+	c.locations = make(map[string][]int)
+	for _, loc := range locationsData {
+		c.locations[loc.LocationName] = loc.Items
 	}
 }
 
@@ -120,25 +103,23 @@ func (c *CommitUI) onScanned(text string) {
 	c.location = strings.TrimSpace(text)
 	c.loadLocations()
 
-	if items, ok := c.locations[c.location]; ok {
-		itemsStr := strings.Trim(items, "[]")
-		itemIDs := strings.Split(itemsStr, ", ")
-
-		var itemInts []int
-		for _, idStr := range itemIDs {
-			if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
-				itemInts = append(itemInts, id)
-			}
+	if itemIDs, ok := c.locations[c.location]; ok {
+		// Location exists
+		if len(itemIDs) == 0 {
+			c.setError("Location has no items")
+			return
 		}
 
-		if len(itemInts) > 1 {
-			c.showItemSelectDialog(itemInts)
+		if len(itemIDs) > 1 {
+			c.showItemSelectDialog(itemIDs)
 			return
-		} else if len(itemInts) == 1 {
-			c.itemID = itemInts[0]
+		} else if len(itemIDs) == 1 {
+			c.itemID = itemIDs[0]
 		}
 	} else {
-		c.showItemSearch()
+		// Location doesn't exist - show search for new location
+		c.setError(fmt.Sprintf("Location '%s' not found. Use Change Item to select an item for new location.", c.location))
+		c.itemID = 0
 		return
 	}
 
@@ -152,6 +133,7 @@ func (c *CommitUI) updateLocationLabel() {
 			itemName = fmt.Sprintf("ID: %d", c.itemID)
 		}
 		c.locationLabel.SetText(fmt.Sprintf("Location: %s\nItem: %s", c.location, itemName))
+		c.setError("")
 	}
 }
 
@@ -195,22 +177,59 @@ func (c *CommitUI) setError(msg string) {
 }
 
 func (c *CommitUI) showItemSelectDialog(itemIDs []int) {
-	// Simplified: just select first one
-	if len(itemIDs) > 0 {
-		c.itemID = itemIDs[0]
+	// Create a dialog to select from multiple items
+	items := make([]string, len(itemIDs))
+	for i, id := range itemIDs {
+		name := c.items_r[id]
+		if name == "" {
+			name = fmt.Sprintf("ID: %d", id)
+		}
+		items[i] = name
+	}
+
+	select := widget.NewSelect(items, func(value string) {
+		// Find the ID for the selected item
+		for _, id := range itemIDs {
+			if c.items_r[id] == value {
+				c.itemID = id
+				break
+			}
+		}
+		c.updateLocationLabel()
+	})
+	select.PlaceHolder = "Select item..."
+
+	dialog := widget.NewForm(
+		widget.NewFormItem("Item", select),
+	)
+
+	dialog.SubmitText = "OK"
+	dialog.OnSubmit = func() {
 		c.updateLocationLabel()
 	}
 }
 
 func (c *CommitUI) showItemSearch() {
-	// Basic implementation
-	chosenItem := ""
+	// Create a search/select dialog for items
+	var itemNames []string
 	for name := range c.items {
-		chosenItem = name
-		break
+		itemNames = append(itemNames, name)
 	}
-	if chosenItem != "" {
-		c.itemID = c.items[chosenItem]
+
+	select := widget.NewSelect(itemNames, func(value string) {
+		if id, ok := c.items[value]; ok {
+			c.itemID = id
+			c.updateLocationLabel()
+		}
+	})
+	select.PlaceHolder = "Search or select item..."
+
+	dialog := widget.NewForm(
+		widget.NewFormItem("Item", select),
+	)
+
+	dialog.SubmitText = "OK"
+	dialog.OnSubmit = func() {
 		c.updateLocationLabel()
 	}
 }
