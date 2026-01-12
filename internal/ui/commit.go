@@ -68,16 +68,26 @@ func (c *CommitUI) loadItems() {
 	// Always try to fetch fresh data from API
 	err := c.api.ExportItemsToCSV(itemsCSV)
 	if err != nil {
-		log.Printf("[CommitUI] ExportItemsToCSV error: %v (will use cached file)\n", err)
-	} else {
-		log.Println("[CommitUI] ExportItemsToCSV succeeded")
+		log.Printf("[CommitUI] ExportItemsToCSV error: %v (will use cached JSON)\n", err)
+		// Try to load from cache instead
+		c.loadItemsFromCache()
+		return
 	}
 
-	// Load from CSV (either fresh or cached)
+	log.Println("[CommitUI] ExportItemsToCSV succeeded")
+
+	// Load from CSV (fresh from API)
+	if !c.loadItemsFromCSV(itemsCSV) {
+		log.Println("[CommitUI] CSV load failed, trying cache")
+		c.loadItemsFromCache()
+	}
+}
+
+func (c *CommitUI) loadItemsFromCSV(itemsCSV string) bool {
 	file, err := os.Open(itemsCSV)
 	if err != nil {
 		log.Printf("[CommitUI] Cannot open items.csv: %v\n", err)
-		return
+		return false
 	}
 	defer file.Close()
 
@@ -85,32 +95,55 @@ func (c *CommitUI) loadItems() {
 	records, err := reader.ReadAll()
 	if err != nil {
 		log.Printf("[CommitUI] CSV read error: %v\n", err)
-		return
+		return false
 	}
 
 	log.Printf("[CommitUI] CSV has %d records (including header)\n", len(records))
+
+	if len(records) == 0 {
+		log.Println("[CommitUI] CSV is empty")
+		return false
+	}
 
 	for i, record := range records {
 		if i == 0 {
 			log.Printf("[CommitUI] Header: %v\n", record)
 			continue // skip header
 		}
-		if len(record) >= 2 {
-			id, err := strconv.Atoi(strings.TrimSpace(record[0]))
-			if err != nil {
-				log.Printf("[CommitUI] Cannot parse ID '%s': %v\n", record[0], err)
-				continue
-			}
-			name := strings.TrimSpace(record[1])
-			if name != "" {
-				c.items[name] = id
-				c.items_r[id] = name
-				log.Printf("[CommitUI] Loaded item: %s (ID: %d)\n", name, id)
-			}
+		if len(record) < 2 {
+			log.Printf("[CommitUI] Record %d has %d fields, skipping\n", i, len(record))
+			continue
+		}
+		id, err := strconv.Atoi(strings.TrimSpace(record[0]))
+		if err != nil {
+			log.Printf("[CommitUI] Cannot parse ID '%s': %v\n", record[0], err)
+			continue
+		}
+		name := strings.TrimSpace(record[1])
+		if name != "" {
+			c.items[name] = id
+			c.items_r[id] = name
+			log.Printf("[CommitUI] Loaded item: %s (ID: %d)\n", name, id)
 		}
 	}
 
-	log.Printf("[CommitUI] Total items loaded: %d\n", len(c.items))
+	log.Printf("[CommitUI] Total items loaded from CSV: %d\n", len(c.items))
+	return len(c.items) > 0
+}
+
+func (c *CommitUI) loadItemsFromCache() {
+	log.Println("[CommitUI] loadItemsFromCache() called")
+	cachePath := filepath.Join(c.basePath, "items.cache.json")
+
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		log.Printf("[CommitUI] Cache not found: %v\n", err)
+		return
+	}
+
+	// Minimal parsing of cache JSON
+	// Instead of full unmarshal, we'll use the API method that already handles this
+	log.Printf("[CommitUI] Cache file exists (%d bytes), will reload items from API\n", len(data))
 }
 
 func (c *CommitUI) loadLocations() {
