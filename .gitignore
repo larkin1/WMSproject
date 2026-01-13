@@ -13,3 +13,8 @@ main.spec
 main.build/
 main.dist/
 main.bin
+
+# Binaries
+*.apk
+*.exe
+main
